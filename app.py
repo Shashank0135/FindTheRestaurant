@@ -18,9 +18,8 @@ load_dotenv('.env')
 df = pd.read_csv("restaurants.csv", encoding='ISO-8859-1')
 
 # Convert the DataFrame to a dictionary for easy access
-restaurants = df.to_dict(orient='records')
+# restaurants = df.to_dict(orient='records')
 
-PER_PAGE = 10
 
 conn = psycopg2.connect(
     dbname=os.getenv("POSTGRES_DB"),
@@ -30,7 +29,49 @@ conn = psycopg2.connect(
     port=os.getenv("DATABASE_PORT")
 )
 
+cursor = conn.cursor()
 
+
+# Query to fetch column names from a specific table
+table_name = 'restaurant_info'
+cursor.execute("""
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_name = %s
+""", (table_name,))
+
+# Fetch all rows from the result set
+columns = cursor.fetchall()
+# Print the column names
+for column in columns:
+    print(column[0])
+
+columns = df.columns.tolist()
+
+cursor = conn.cursor()
+
+query = f"""
+    SELECT *
+    FROM restaurant_info;
+    """
+
+cursor.execute(query)
+restaurants_details = cursor.fetchall()
+
+all_restaurants = []
+
+for k in restaurants_details:
+    l = list(k)
+    all_restaurants.append(l)
+
+restaurants = []
+for row in all_restaurants:
+    row_dict = dict(zip(columns, row))
+    restaurants.append(row_dict)
+for i in range(5):
+    print(restaurants[i])
+
+PER_PAGE = 10
 
 @app.get("/")
 def read_root(request: Request):
@@ -98,7 +139,7 @@ async def home(request: Request, page: int = 1):
 
 # Endpoint to retrieve restaurant details by ID and render template
 @app.get("/restaurant/{restaurant_id}", response_class=HTMLResponse)
-async def get_restaurant(request: Request, restaurant_id: int):
+async def get_restaurant(request: Request, restaurant_id: str):
     for restaurant in restaurants:
         if restaurant['Restaurant ID'] == restaurant_id:
             return templates.TemplateResponse("restaurant.html", {"request": request, "restaurant": restaurant})
@@ -106,7 +147,7 @@ async def get_restaurant(request: Request, restaurant_id: int):
 
 # Route to handle the search form submission
 @app.get("/search")
-async def search(request: Request, restaurant_id: int):
+async def search(request: Request, restaurant_id: str):
     return RedirectResponse(url=f"/restaurant/{restaurant_id}")
 
 if __name__ == '__main__':
